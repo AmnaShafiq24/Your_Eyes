@@ -1,4 +1,4 @@
-name: basic_hw
+name: your_eyes
 description: "Your Eyes - Grocery and Currency Recognition App."
 publish_to: 'none'
 version: 1.0.0+1
@@ -31,7 +31,7 @@ dev_dependencies:
 flutter_icons:
   android: true
   ios: true
-  #image_path: "assets/images/logo.png"
+  image_path: "assets/images/logo.png"
 
 flutter:
   uses-material-design: true
