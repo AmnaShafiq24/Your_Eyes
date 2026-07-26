@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Recognition_Service.dart';
+import 'language_selection_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Function(String) onLocaleChange;
@@ -25,7 +25,9 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => const CaptureImageScreen(),
+        builder: (_) => LanguageSelectionScreen(
+          onLocaleChange: widget.onLocaleChange,
+        ),
       ),
     );
 
