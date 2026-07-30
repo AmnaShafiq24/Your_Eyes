@@ -62,7 +62,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const CaptureImageScreen()),
+      MaterialPageRoute(builder: (_) => CaptureImageScreen(languageCode: code)),
     );
   }
 
