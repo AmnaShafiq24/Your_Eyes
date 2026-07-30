@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Recognition_Service.dart';
+import 'Services/voice_assistant_service.dart';
 
-class LanguageSelectionScreen extends StatelessWidget {
+class LanguageSelectionScreen extends StatefulWidget {
   final Function(String) onLocaleChange;
 
   const LanguageSelectionScreen({
@@ -11,22 +12,62 @@ class LanguageSelectionScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final languages = [
-      {
-        "code": "en",
-        "title": "English",
-        "subtitle": "Continue in English",
-        "icon": Icons.language,
-      },
-      {
-        "code": "ur",
-        "title": "اردو",
-        "subtitle": "اردو میں جاری رکھیں",
-        "icon": Icons.translate,
-      },
-    ];
+  State<LanguageSelectionScreen> createState() => _LanguageSelectionScreenState();
+}
 
+class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
+  final languages = [
+    {
+      "code": "en",
+      "title": "English",
+      "subtitle": "Continue in English",
+      "icon": Icons.language,
+    },
+    {
+      "code": "ur",
+      "title": "اردو",
+      "subtitle": "اردو میں جاری رکھیں",
+      "icon": Icons.translate,
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    VoiceAssistantService.speak(
+      "Choose your language. Say English or Urdu to continue.",
+      languageCode: "en",
+    );
+    // Start listening for voice input
+    VoiceAssistantService.listen(_handleVoiceInput);
+  }
+
+  void _handleVoiceInput(String result) async {
+    if (result.toLowerCase().contains("english")) {
+      await _selectLanguage("en");
+    } else if (result.toLowerCase().contains("urdu")) {
+      await _selectLanguage("ur");
+    }
+  }
+
+  Future<void> _selectLanguage(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("languageCode", code);
+    await prefs.setBool("isLanguageSelected", true);
+
+    widget.onLocaleChange(code);
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const CaptureImageScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xff081C2D),
       body: SafeArea(
@@ -65,21 +106,7 @@ class LanguageSelectionScreen extends StatelessWidget {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString(
-                              "languageCode", lang["code"] as String);
-                          await prefs.setBool("isLanguageSelected", true);
-
-                          onLocaleChange(lang["code"] as String);
-
-                          if (!context.mounted) return;
-
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CaptureImageScreen(),
-                            ),
-                          );
+                          await _selectLanguage(lang["code"] as String);
                         },
                         child: Container(
                           padding: const EdgeInsets.all(20),
