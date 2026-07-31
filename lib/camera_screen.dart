@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'Services/voice_assistant_service.dart';
+import 'Services/recognition_service.dart';
 
 class CaptureImageScreen extends StatefulWidget {
   final String languageCode; // "en" or "ur"
@@ -106,7 +107,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
 
     try {
       if (matchedAction == "capture") {
-        await captureImage();
+        await captureImage(fromVoice: true);
       } else if (matchedAction == "settings") {
         openSettings();
       }
@@ -115,13 +116,13 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     }
 
     if (!mounted) return;
-    // Restart guidance and listening after each command
+    // Restart guidance and listening after each voice command
     await giveGuidance();
     isHandlingCommand = false;
     if (mounted) listenForCommand();
   }
 
-  Future<void> captureImage() async {
+  Future<void> captureImage({bool fromVoice = false}) async {
     try {
       if (controller == null || !controller!.value.isInitialized) {
         debugPrint("Camera not initialized yet.");
@@ -143,6 +144,22 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
           ? "تصویر لی گئی ہے۔"
           : "Image captured.";
       await VoiceAssistantService.speak(msg, languageCode: widget.languageCode);
+
+      // Stop listening before navigating so voice commands don't fire on the new screen
+      VoiceAssistantService.stopListening();
+
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RecognitionServiceScreen(capturedImage: image),
+        ),
+      );
+
+      if (!fromVoice && mounted) {
+        await giveGuidance();
+        listenForCommand();
+      }
     } catch (e) {
       debugPrint("Error capturing image: $e");
     }
@@ -197,7 +214,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: FloatingActionButton(
-                      onPressed: captureImage,
+                      onPressed: () => captureImage(fromVoice: false),
                       backgroundColor: const Color(0xff0B4F7D),
                       child: const Icon(Icons.camera_alt),
                     ),

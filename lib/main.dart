@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'splash_screen.dart';
-import 'Recognition_Service.dart';
+import 'camera_screen.dart';
 
 
 void main() {

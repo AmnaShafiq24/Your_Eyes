@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'Recognition_Service.dart';
+import 'camera_screen.dart';
 import 'Services/voice_assistant_service.dart';
 
 class LanguageSelectionScreen extends StatefulWidget {

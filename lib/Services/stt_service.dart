@@ -22,12 +22,16 @@ class STTService {
     return isInitialized;
   }
 
-  void startListening(
+  Future<void> startListening(
       Function(String) onResult, {
         Function()? onSessionEnded,
       }) async {
-    if (speech.isListening) return;
-    onSessionEnded = onSessionEnded;
+    // Make sure any previous session is fully stopped before starting a new one
+    if (speech.isListening) {
+      await stopListening();
+    }
+
+    this.onSessionEnded = onSessionEnded;
 
     await speech.listen(
       onResult: (result) {
@@ -42,8 +46,12 @@ class STTService {
     );
   }
 
-  void stopListening() {
+  Future<void> stopListening() async {
     onSessionEnded = null;
-    speech.stop();
+    if (speech.isListening) {
+      await speech.stop();
+      // Give the browser/engine a brief moment to fully release the session on web
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
   }
 }
