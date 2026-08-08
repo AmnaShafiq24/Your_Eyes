@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'language_selection_screen.dart';
+import 'camera_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Function(String) onLocaleChange;
@@ -7,30 +9,47 @@ class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.onLocaleChange});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() => SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _goNext();
+    goNext();
   }
 
-  Future<void> _goNext() async {
+  Future<void> goNext() async {
     await Future.delayed(const Duration(seconds: 5));
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LanguageSelectionScreen(
-          onLocaleChange: widget.onLocaleChange,
-        ),
-      ),
-    );
+    final prefs = await SharedPreferences.getInstance();
+    final bool isLanguageSelected = prefs.getBool("isLanguageSelected") ?? false;
+    final String? languageCode = prefs.getString("languageCode");
 
+    if (!mounted) return;
+
+    if (isLanguageSelected && languageCode != null) {
+      widget.onLocaleChange(languageCode);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CaptureImageScreen(languageCode: languageCode),
+        ),
+      );
+    } else {
+      // First launch — no language saved yet, show language selection
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LanguageSelectionScreen(
+            onLocaleChange: widget.onLocaleChange,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -43,8 +62,8 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               Image.asset(
                 'assets/images/logo.png',
-                width: 120,
-                height: 120,
+                width: 150,
+                height: 150,
               ),
               const SizedBox(height: 20),
               const Text(
