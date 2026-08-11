@@ -9,10 +9,10 @@ class RecognitionServiceScreen extends StatefulWidget {
   const RecognitionServiceScreen({super.key, required this.capturedImage});
 
   @override
-  State<RecognitionServiceScreen> createState() => _RecognitionServiceScreenState();
+  State<RecognitionServiceScreen> createState() => RecognitionServiceScreenState();
 }
 
-class _RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
+class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   String resultMessage = "Processing image...";
 
   // Generic terms Vision API's label detection actually returns for money/notes
@@ -26,22 +26,22 @@ class _RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     "potato", "tomato", "carrot", "onion", "cabbage", "spinach", "pepper"
   ];
 
-  static const String _cloudFunctionUrl =
+  static const String cloudFunctionUrl =
       "https://recognizeimage-y2lqize5aq-uc.a.run.app";
 
   @override
   void initState() {
     super.initState();
-    _analyzeImage();
+    analyzeImage();
   }
 
-  Future<void> _analyzeImage() async {
+  Future<void> analyzeImage() async {
     try {
       final imageBytes = await widget.capturedImage.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
       final response = await http.post(
-        Uri.parse(_cloudFunctionUrl),
+        Uri.parse(cloudFunctionUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"image": base64Image}),
       );
@@ -85,7 +85,7 @@ class _RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
       }
 
       setState(() {
-        resultMessage = _buildResultMessage(
+        resultMessage = buildResultMessage(
           totalObjects,
           isCurrencyDetected,
           denomination,
@@ -100,7 +100,7 @@ class _RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     }
   }
 
-  String _buildResultMessage(
+  String buildResultMessage(
       int totalObjects,
       bool isCurrencyDetected,
       String? denomination,
@@ -143,19 +143,88 @@ class _RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Recognition Service"),
+        title: const Text(
+          "Recognition Service",
+          style: TextStyle(color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         backgroundColor: const Color(0xff0B4F7D),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            resultMessage,
-            style: const TextStyle(fontSize: 18),
-            textAlign: TextAlign.center,
+      backgroundColor: const Color(0xffF5F0FA),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Speech bubble containing the recognition result text
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      resultMessage,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        color: Color(0xff0B4F7D),
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+
+                // Small triangle "tail" pointing down from the bubble to the avatar
+                CustomPaint(
+                  size: const Size(24, 14),
+                  painter: BubbleTailPainter(),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Assistant avatar, centered
+                Image.asset(
+                  "assets/images/Assistant_girl.png",
+                  height: 260,
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+class BubbleTailPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white;
+    final path = Path()
+      ..moveTo(size.width / 2 - 12, 0)
+      ..lineTo(size.width / 2 + 12, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
