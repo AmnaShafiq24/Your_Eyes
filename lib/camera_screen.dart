@@ -21,8 +21,6 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
   Uint8List? capturedImageBytes;
   bool isHandlingCommand = false;
 
-  // Mutable local copy so this screen reflects language changes made from
-  // Settings immediately, without needing to rebuild/recreate this screen.
   late String currentLanguageCode;
 
   @override
@@ -64,6 +62,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     VoiceAssistantService.listen(
       handleVoiceInput,
       onSessionEnded: handleSessionEnded,
+      languageCode: currentLanguageCode,
     );
   }
 
@@ -76,7 +75,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     if (!mounted) return;
     if (currentLanguageCode == "ur") {
       await VoiceAssistantService.speak(
-        "تصویر لینے کے لئے 'کیپچر' کہیں۔ سیٹنگز کھولنے کے لئے 'سیٹنگز کھولیں' کہیں۔",
+        "تصویر لینے کے لئے 'تصویر لو' کہیں۔ سیٹنگز کھولنے کے لئے 'سیٹنگز' کہیں۔",
         languageCode: "ur",
       );
     } else {
@@ -93,9 +92,19 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     String? matchedAction;
 
     if (currentLanguageCode == "ur") {
-      if (input.contains("کیپچر")) {
+
+      final bool saysCapture = input.contains("tasveer") ||
+          input.contains("tasvir") ||
+          input.contains("تصویر") ||
+          input.contains("کیپچر");
+
+      final bool saysSettings = input.contains("سیٹنگ") ||
+          input.contains("setting") ||
+          input.contains("settings");
+
+      if (saysCapture) {
         matchedAction = "capture";
-      } else if (input.contains("سیٹنگ")) {
+      } else if (saysSettings) {
         matchedAction = "settings";
       }
     } else {

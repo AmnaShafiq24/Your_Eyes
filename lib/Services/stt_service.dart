@@ -25,6 +25,7 @@ class STTService {
   Future<void> startListening(
       Function(String) onResult, {
         Function()? onSessionEnded,
+        String? localeId,
       }) async {
     // Make sure any previous session is fully stopped before starting a new one
     if (speech.isListening) {
@@ -43,6 +44,7 @@ class STTService {
       partialResults: true,
       cancelOnError: true,
       listenMode: ListenMode.dictation,
+      localeId: localeId,
     );
   }
 

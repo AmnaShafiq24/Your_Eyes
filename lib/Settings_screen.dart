@@ -18,6 +18,7 @@ class SettingsScreen extends StatefulWidget {
 
 class SettingsScreenState extends State<SettingsScreen> {
   late String selectedLanguage;
+  bool isHandlingCommand = false;
 
   final languages = [
     {
@@ -38,10 +39,30 @@ class SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     selectedLanguage = widget.currentLanguageCode;
-    giveGuidanceAndListen();
+    startVoiceAssistant();
   }
 
-  Future<void> giveGuidanceAndListen() async {
+  Future<void> startVoiceAssistant() async {
+    await giveGuidance();
+    listenForCommand();
+  }
+
+  void listenForCommand() {
+    VoiceAssistantService.stopListening();
+    VoiceAssistantService.listen(
+      handleVoiceInput,
+      onSessionEnded: handleSessionEnded,
+      languageCode: selectedLanguage,
+    );
+  }
+
+  void handleSessionEnded() {
+    if (!mounted || isHandlingCommand) return;
+    listenForCommand();
+  }
+
+  Future<void> giveGuidance() async {
+    if (!mounted) return;
     if (selectedLanguage == "ur") {
       await VoiceAssistantService.speak(
         "سیٹنگز۔ زبان تبدیل کرنے کے لئے 'انگلش' یا 'اردو' کہیں۔ کیمرہ اسکرین پر واپس جانے کے لئے 'واپس جائیں' کہیں۔",
@@ -53,28 +74,69 @@ class SettingsScreenState extends State<SettingsScreen> {
         languageCode: "en",
       );
     }
-    if (mounted) {
-      VoiceAssistantService.listen(handleVoiceInput);
-    }
   }
 
   void handleVoiceInput(String result) async {
-    final input = result.toLowerCase().trim();
+    // Guard against overlapping partial-result triggers while a
+    // previous command is still being processed.
+    if (!mounted || isHandlingCommand) return;
 
-    if (input.contains("go back") ||
+    final input = result.toLowerCase().trim();
+    String? matchedAction;
+    String? matchedLanguage;
+
+    // Urdu speech is often transcribed phonetically in Latin letters
+    // (e.g. "wapis jao") rather than Urdu script, depending on the STT
+    // engine/locale, so we match both script and common romanized forms.
+    final bool saysGoBack = input.contains("go back") ||
         input.contains("back") ||
-        input.contains("واپس")) {
-      await goBack();
-    } else if (input.contains("english") || input.contains("انگلش")) {
-      await selectLanguage("en");
-    } else if (input.contains("urdu") || input.contains("اردو")) {
-      await selectLanguage("ur");
+        input.contains("واپس") ||
+        input.contains("wapis") ||
+        input.contains("wapas") ||
+        input.contains("vapis") ||
+        input.contains("vapas") ||
+        input.contains("peeche");
+
+    final bool saysEnglish =
+        input.contains("english") || input.contains("انگلش");
+
+    final bool saysUrdu = input.contains("urdu") ||
+        input.contains("اردو") ||
+        input.contains("urdo");
+
+    if (saysGoBack) {
+      matchedAction = "back";
+    } else if (saysEnglish) {
+      matchedAction = "language";
+      matchedLanguage = "en";
+    } else if (saysUrdu) {
+      matchedAction = "language";
+      matchedLanguage = "ur";
     }
+
+    if (matchedAction == null) return;
+
+    isHandlingCommand = true;
+    VoiceAssistantService.stopListening();
+
+    try {
+      if (matchedAction == "back") {
+        await goBack();
+        // Screen is popping — no need to restart listening here.
+        return;
+      } else if (matchedAction == "language" && matchedLanguage != null) {
+        await selectLanguage(matchedLanguage);
+      }
+    } catch (e) {
+      debugPrint("Error handling settings voice command: $e");
+    }
+
+    if (!mounted) return;
+    isHandlingCommand = false;
+    listenForCommand();
   }
 
   Future<void> goBack() async {
-    VoiceAssistantService.stopListening();
-
     final msg = selectedLanguage == "ur"
         ? "کیمرہ اسکرین پر واپس جا رہے ہیں۔"
         : "Going back to the camera screen.";
@@ -85,9 +147,13 @@ class SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> selectLanguage(String code) async {
-    if (code == selectedLanguage) return;
-
-    VoiceAssistantService.stopListening();
+    if (code == selectedLanguage) {
+      final msg = code == "ur"
+          ? "زبان پہلے ہی اردو ہے۔"
+          : "Language is already English.";
+      await VoiceAssistantService.speak(msg, languageCode: code);
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("languageCode", code);
@@ -107,10 +173,6 @@ class SettingsScreenState extends State<SettingsScreen> {
         ? "زبان اردو میں تبدیل کر دی گئی ہے۔"
         : "Language changed to English.";
     await VoiceAssistantService.speak(confirmMsg, languageCode: code);
-
-    if (mounted) {
-      VoiceAssistantService.listen(handleVoiceInput);
-    }
   }
 
   @override
@@ -171,7 +233,14 @@ class SettingsScreenState extends State<SettingsScreen> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () async {
+                          if (isHandlingCommand) return;
+                          isHandlingCommand = true;
+                          VoiceAssistantService.stopListening();
                           await selectLanguage(lang["code"] as String);
+                          if (mounted) {
+                            isHandlingCommand = false;
+                            listenForCommand();
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.all(20),

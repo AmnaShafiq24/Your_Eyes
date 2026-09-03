@@ -47,7 +47,7 @@ def recognizeImage(req: https_fn.Request) -> https_fn.Response:
         label_response = client.label_detection(image=image)
         labels = [label.description for label in label_response.label_annotations]
 
-        # Text detection: read any numerals printed (for currency denomination)
+        # Text detection: read any numerals printed (for currency denominations)
         text_response = client.text_detection(image=image)
         detected_text = (
             text_response.text_annotations[0].description
@@ -55,27 +55,24 @@ def recognizeImage(req: https_fn.Request) -> https_fn.Response:
             else ""
         )
 
-        # Log the raw OCR text so we can see exactly what Vision API read
         print(f"OCR detected text: {detected_text!r}")
 
-        # Extract any recognized denomination from the OCR text.
-        # Strip commas so numbers like "1,000" are read as "1000".
+        # Strip commas so numbers like "1,000" are read as "1000"
         cleaned_text = detected_text.replace(",", "")
         numbers_found = re.findall(r"\d+", cleaned_text)
         print(f"Numbers found in OCR text: {numbers_found}")
 
-        found_denomination = None
+        found_denominations = []
         for num in numbers_found:
-            if num in VALID_DENOMINATIONS:
-                found_denomination = num
-                break
+            if num in VALID_DENOMINATIONS and num not in found_denominations:
+                found_denominations.append(num)
 
         return https_fn.Response(
             json.dumps({
                 "labels": labels,
                 "detectedText": detected_text,
                 "numbersFound": numbers_found,
-                "denomination": found_denomination,
+                "denominations": found_denominations,
             }),
             content_type="application/json",
             headers=cors_headers,
