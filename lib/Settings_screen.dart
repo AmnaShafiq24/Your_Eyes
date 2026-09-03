@@ -42,28 +42,46 @@ class SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> giveGuidanceAndListen() async {
-    if (widget.currentLanguageCode == "ur") {
+    if (selectedLanguage == "ur") {
       await VoiceAssistantService.speak(
-        "سیٹنگز۔ زبان تبدیل کرنے کے لئے 'انگلش' یا 'اردو' کہیں۔",
+        "سیٹنگز۔ زبان تبدیل کرنے کے لئے 'انگلش' یا 'اردو' کہیں۔ کیمرہ اسکرین پر واپس جانے کے لئے 'واپس جائیں' کہیں۔",
         languageCode: "ur",
       );
     } else {
       await VoiceAssistantService.speak(
-        "Settings. Say English or Urdu to change the language.",
+        "Settings. Say English or Urdu to change the language. Say 'go back' to return to the camera screen.",
         languageCode: "en",
       );
     }
-    VoiceAssistantService.listen(handleVoiceInput);
+    if (mounted) {
+      VoiceAssistantService.listen(handleVoiceInput);
+    }
   }
 
   void handleVoiceInput(String result) async {
     final input = result.toLowerCase().trim();
 
-    if (input.contains("english") || input.contains("انگلش")) {
+    if (input.contains("go back") ||
+        input.contains("back") ||
+        input.contains("واپس")) {
+      await goBack();
+    } else if (input.contains("english") || input.contains("انگلش")) {
       await selectLanguage("en");
     } else if (input.contains("urdu") || input.contains("اردو")) {
       await selectLanguage("ur");
     }
+  }
+
+  Future<void> goBack() async {
+    VoiceAssistantService.stopListening();
+
+    final msg = selectedLanguage == "ur"
+        ? "کیمرہ اسکرین پر واپس جا رہے ہیں۔"
+        : "Going back to the camera screen.";
+    await VoiceAssistantService.speak(msg, languageCode: selectedLanguage);
+
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   Future<void> selectLanguage(String code) async {
@@ -75,6 +93,8 @@ class SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString("languageCode", code);
     await prefs.setBool("isLanguageSelected", true);
 
+    // Applies the new language app-wide via the callback passed down
+    // from the calling screen, so it picks it up immediately on return.
     widget.onLocaleChange(code);
 
     if (!mounted) return;
@@ -132,7 +152,7 @@ class SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                "Say 'English' or 'Urdu', or tap to select",
+                "Say 'English' or 'Urdu', or tap to select. Say 'go back' to return.",
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 15,

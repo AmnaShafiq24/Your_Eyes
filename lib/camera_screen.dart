@@ -4,9 +4,10 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'Services/voice_assistant_service.dart';
 import 'Services/recognition_service.dart';
+import 'Settings_screen.dart';
 
 class CaptureImageScreen extends StatefulWidget {
-  final String languageCode; // "en" or "ur"
+  final String languageCode; // "en" or "ur", initial value
 
   const CaptureImageScreen({super.key, required this.languageCode});
 
@@ -20,9 +21,14 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
   Uint8List? capturedImageBytes;
   bool isHandlingCommand = false;
 
+  // Mutable local copy so this screen reflects language changes made from
+  // Settings immediately, without needing to rebuild/recreate this screen.
+  late String currentLanguageCode;
+
   @override
   void initState() {
     super.initState();
+    currentLanguageCode = widget.languageCode;
     setupCamera();
     startVoiceAssistant();
   }
@@ -68,7 +74,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
 
   Future<void> giveGuidance() async {
     if (!mounted) return;
-    if (widget.languageCode == "ur") {
+    if (currentLanguageCode == "ur") {
       await VoiceAssistantService.speak(
         "تصویر لینے کے لئے 'کیپچر' کہیں۔ سیٹنگز کھولنے کے لئے 'سیٹنگز کھولیں' کہیں۔",
         languageCode: "ur",
@@ -86,7 +92,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     final input = result.toLowerCase().trim();
     String? matchedAction;
 
-    if (widget.languageCode == "ur") {
+    if (currentLanguageCode == "ur") {
       if (input.contains("کیپچر")) {
         matchedAction = "capture";
       } else if (input.contains("سیٹنگ")) {
@@ -109,7 +115,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
       if (matchedAction == "capture") {
         await captureImage(fromVoice: true);
       } else if (matchedAction == "settings") {
-        openSettings();
+        await openSettings(fromVoice: true);
       }
     } catch (e) {
       debugPrint("Error handling voice command: $e");
@@ -140,10 +146,10 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
         capturedImageBytes = bytes;
       });
 
-      final msg = widget.languageCode == "ur"
+      final msg = currentLanguageCode == "ur"
           ? "تصویر لی گئی ہے۔"
           : "Image captured.";
-      await VoiceAssistantService.speak(msg, languageCode: widget.languageCode);
+      await VoiceAssistantService.speak(msg, languageCode: currentLanguageCode);
 
       // Stop listening before navigating so voice commands don't fire on the new screen
       VoiceAssistantService.stopListening();
@@ -165,16 +171,41 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     }
   }
 
-  void openSettings() {
+  Future<void> openSettings({bool fromVoice = false}) async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Settings tapped")),
+
+    VoiceAssistantService.stopListening();
+
+    final confirmMsg = currentLanguageCode == "ur"
+        ? "سیٹنگز کھول دی گئی ہیں۔"
+        : "Settings opened.";
+    await VoiceAssistantService.speak(confirmMsg, languageCode: currentLanguageCode);
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SettingsScreen(
+          currentLanguageCode: currentLanguageCode,
+          onLocaleChange: (newCode) {
+            // Reflect the language change on this screen immediately,
+            // even though this screen instance was never recreated.
+            if (mounted) {
+              setState(() {
+                currentLanguageCode = newCode;
+              });
+            }
+          },
+        ),
+      ),
     );
 
-    if (widget.languageCode == "ur") {
-      VoiceAssistantService.speak("سیٹنگز کھول دی گئی ہیں۔", languageCode: "ur");
-    } else {
-      VoiceAssistantService.speak("Settings opened.", languageCode: "en");
+    // Restart guidance/listening in whichever language is now current
+    // after returning from Settings, for both voice- and tap-triggered opens.
+    if (mounted) {
+      await giveGuidance();
+      listenForCommand();
     }
   }
 
@@ -194,7 +225,7 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
-            onPressed: openSettings,
+            onPressed: () => openSettings(fromVoice: false),
           ),
         ],
       ),
