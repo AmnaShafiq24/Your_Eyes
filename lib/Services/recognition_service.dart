@@ -2,11 +2,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'voice_assistant_service.dart';
 
 class RecognitionServiceScreen extends StatefulWidget {
   final XFile capturedImage;
+  final String languageCode; // "en" or "ur"
 
-  const RecognitionServiceScreen({super.key, required this.capturedImage});
+  const RecognitionServiceScreen({
+    super.key,
+    required this.capturedImage,
+    required this.languageCode,
+  });
 
   @override
   State<RecognitionServiceScreen> createState() => RecognitionServiceScreenState();
@@ -14,16 +20,35 @@ class RecognitionServiceScreen extends StatefulWidget {
 
 class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   String resultMessage = "Processing image...";
+  bool isHandlingCommand = false;
 
-  // Generic terms Vision API's label detection actually returns for money/notes
   final List<String> currencyLabels = [
     "banknote", "currency", "cash", "money", "bill", "paper currency", "coin"
   ];
+
   final List<String> fruits = [
-    "apple", "banana", "mango", "orange", "grape", "pineapple", "watermelon"
+    "apple", "banana", "mango", "orange", "grape", "pineapple", "watermelon",
+    "strawberry", "peach", "pear", "plum", "cherry", "kiwi", "papaya",
+    "pomegranate", "guava", "lemon", "lime", "fig", "apricot", "blueberry",
+    "coconut", "dragon fruit", "lychee", "melon", "avocado", "cantaloupe",
+    "honeydew", "raspberry", "blackberry", "cranberry", "mulberry",
+    "passion fruit", "star fruit", "persimmon", "custard apple",
+    "jackfruit", "durian", "rambutan", "longan", "tangerine", "mandarin",
+    "grapefruit", "nectarine", "date", "prune", "gooseberry", "sapodilla",
+    "quince", "loquat", "elderberry", "currant", "tamarind", "olive",
+    "breadfruit", "soursop",
   ];
+
   final List<String> vegetables = [
-    "potato", "tomato", "carrot", "onion", "cabbage", "spinach", "pepper"
+    "potato", "tomato", "carrot", "onion", "cabbage", "spinach", "pepper",
+    "cucumber", "eggplant", "broccoli", "cauliflower", "garlic", "ginger",
+    "pumpkin", "radish", "beet", "corn", "peas", "lettuce", "zucchini",
+    "okra", "mushroom", "celery", "turnip", "bell pepper", "chili",
+    "asparagus", "artichoke", "leek", "kale", "brussels sprouts",
+    "bok choy", "fennel", "parsnip", "rutabaga", "sweet potato", "yam",
+    "squash", "green bean", "lima bean", "kidney bean", "chickpea",
+    "lentil", "bitter gourd", "bottle gourd", "ridge gourd", "snake gourd",
+    "drumstick", "taro", "arugula", "watercress", "chard",
   ];
 
   static const String cloudFunctionUrl =
@@ -33,6 +58,12 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   void initState() {
     super.initState();
     analyzeImage();
+  }
+
+  @override
+  void dispose() {
+    VoiceAssistantService.stopListening();
+    super.dispose();
   }
 
   Future<void> analyzeImage() async {
@@ -52,16 +83,16 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
         setState(() {
           resultMessage = "Error: ${data['error']}";
         });
+        await speakAndListen(resultMessage);
         return;
       }
 
       final labels = List<String>.from(data['labels'] ?? []);
-      final String? denomination = data['denomination'];
+      final List<String> denominations =
+      List<String>.from(data['denominations'] ?? []);
 
-      // Task 1: total number of objects detected
       final int totalObjects = labels.length;
 
-      // Task 2: match against currency, fruits, vegetables only
       bool isCurrencyDetected = false;
       final List<String> matchedFruits = [];
       final List<String> matchedVegetables = [];
@@ -73,67 +104,151 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
           isCurrencyDetected = true;
         }
         for (var fruit in fruits) {
-          if (text.contains(fruit)) {
+          if (text.contains(fruit) && !matchedFruits.contains(fruit)) {
             matchedFruits.add(fruit);
           }
         }
         for (var veg in vegetables) {
-          if (text.contains(veg)) {
+          if (text.contains(veg) && !matchedVegetables.contains(veg)) {
             matchedVegetables.add(veg);
           }
         }
       }
 
+      final message = buildResultMessage(
+        totalObjects,
+        isCurrencyDetected,
+        denominations,
+        matchedFruits,
+        matchedVegetables,
+      );
+
       setState(() {
-        resultMessage = buildResultMessage(
-          totalObjects,
-          isCurrencyDetected,
-          denomination,
-          matchedFruits,
-          matchedVegetables,
-        );
+        resultMessage = message;
       });
+
+      await speakAndListen(message);
     } catch (e) {
+      final errMsg = "Error analyzing image: $e";
       setState(() {
-        resultMessage = "Error analyzing image: $e";
+        resultMessage = errMsg;
       });
+      await speakAndListen(errMsg);
     }
+  }
+
+  // Speaks the given text, then starts listening for a "go back" command
+  // so the user can return to the camera screen without touching the phone.
+  Future<void> speakAndListen(String message) async {
+    await VoiceAssistantService.speak(message, languageCode: widget.languageCode);
+
+    if (widget.languageCode == "ur") {
+      await VoiceAssistantService.speak(
+        "کیمرہ اسکرین پر واپس جانے کے لئے 'واپس جائیں' کہیں۔",
+        languageCode: "ur",
+      );
+    } else {
+      await VoiceAssistantService.speak(
+        "Say 'go back' to return to the camera screen.",
+        languageCode: "en",
+      );
+    }
+
+    if (mounted) {
+      listenForCommand();
+    }
+  }
+
+  void listenForCommand() {
+    VoiceAssistantService.stopListening();
+    VoiceAssistantService.listen(
+      handleVoiceInput,
+      onSessionEnded: handleSessionEnded,
+      languageCode: widget.languageCode,
+    );
+  }
+
+  void handleSessionEnded() {
+    if (!mounted || isHandlingCommand) return;
+    listenForCommand();
+  }
+
+  void handleVoiceInput(String result) async {
+    if (!mounted || isHandlingCommand) return;
+    final input = result.toLowerCase().trim();
+
+    final bool saysGoBack = input.contains("go back") ||
+        input.contains("back") ||
+        input.contains("واپس") ||
+        input.contains("wapis") ||
+        input.contains("wapas") ||
+        input.contains("vapis") ||
+        input.contains("vapas") ||
+        input.contains("peeche");
+
+    if (!saysGoBack) return;
+
+    isHandlingCommand = true;
+    VoiceAssistantService.stopListening();
+
+    final msg = widget.languageCode == "ur"
+        ? "کیمرہ اسکرین پر واپس جا رہے ہیں۔"
+        : "Going back to the camera screen.";
+    await VoiceAssistantService.speak(msg, languageCode: widget.languageCode);
+
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   String buildResultMessage(
       int totalObjects,
       bool isCurrencyDetected,
-      String? denomination,
+      List<String> denominations,
       List<String> fruits,
       List<String> vegetables,
       ) {
     final buffer = StringBuffer();
+    final bool isUrdu = widget.languageCode == "ur";
 
-    // First: total item count
-    buffer.writeln(
-      "There ${totalObjects == 1 ? 'is' : 'are'} $totalObjects item${totalObjects == 1 ? '' : 's'} in the image.",
-    );
+    if (isUrdu) {
+      buffer.writeln("تصویر میں $totalObjects اشیاء ہیں۔");
+    } else {
+      buffer.writeln(
+        "There ${totalObjects == 1 ? 'is' : 'are'} $totalObjects item${totalObjects == 1 ? '' : 's'} in the image.",
+      );
+    }
 
     final bool hasAnyMatch =
         isCurrencyDetected || fruits.isNotEmpty || vegetables.isNotEmpty;
 
     if (!hasAnyMatch) {
-      buffer.writeln("No currency notes, fruits, or vegetables were identified.");
+      buffer.writeln(isUrdu
+          ? "کوئی کرنسی نوٹ، پھل، یا سبزی شناخت نہیں ہوئی۔"
+          : "No currency notes, fruits, or vegetables were identified.");
       return buffer.toString().trim();
     }
 
     if (isCurrencyDetected) {
-      if (denomination != null) {
-        buffer.writeln("Currency note: $denomination rupees");
+      if (denominations.isNotEmpty) {
+        final denomText = denominations.map((d) => "$d").join(', ');
+        buffer.writeln(isUrdu
+            ? "کرنسی نوٹ: $denomText روپے"
+            : "Currency note${denominations.length > 1 ? 's' : ''}: ${denominations.map((d) => "$d rupees").join(', ')}");
       } else {
-        buffer.writeln("Currency note detected, but the denomination could not be read clearly.");
+        buffer.writeln(isUrdu
+            ? "کرنسی نوٹ شناخت ہوا، لیکن مالیت واضح طور پر نہیں پڑھی جا سکی۔"
+            : "Currency note detected, but the denomination could not be read clearly.");
       }
     }
     if (fruits.isNotEmpty) {
-      buffer.writeln("Fruit${fruits.length > 1 ? 's' : ''}: ${fruits.join(', ')}");
+      buffer.writeln(isUrdu
+          ? "پھل: ${fruits.join(', ')}"
+          : "Fruit${fruits.length > 1 ? 's' : ''}: ${fruits.join(', ')}");
     }
     if (vegetables.isNotEmpty) {
-      buffer.writeln("Vegetable${vegetables.length > 1 ? 's' : ''}: ${vegetables.join(', ')}");
+      buffer.writeln(isUrdu
+          ? "سبزی: ${vegetables.join(', ')}"
+          : "Vegetable${vegetables.length > 1 ? 's' : ''}: ${vegetables.join(', ')}");
     }
 
     return buffer.toString().trim();
@@ -159,7 +274,6 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Speech bubble containing the recognition result text
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
@@ -188,21 +302,15 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
                     ),
                   ),
                 ),
-
-                // Small triangle "tail" pointing down from the bubble to the avatar
                 CustomPaint(
                   size: const Size(24, 14),
                   painter: BubbleTailPainter(),
                 ),
-
                 const SizedBox(height: 16),
-
-                // Assistant avatar, centered
                 Image.asset(
-                  "assets/images/Assistant_girl.png",
+                  "assets/images/Assistant_image.png",
                   height: 260,
                 ),
-
                 const SizedBox(height: 24),
               ],
             ),
