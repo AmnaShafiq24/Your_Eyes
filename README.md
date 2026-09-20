@@ -4,8 +4,6 @@
 
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-blue)
 ![AI](https://img.shields.io/badge/AI-GPT--4o%20mini-412991)
-![Status](https://img.shields.io/badge/status-in%20development-orange)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
