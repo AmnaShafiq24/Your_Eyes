@@ -202,16 +202,9 @@ Please keep accessibility in mind with every change: if a feature can't be used 
 
 | Name | Role |
 |------|------|
-| `[Your Name]` | `[Role]` |
-| `[Teammate]` | `[Role]` |
+| `Amna Shafiq ` | `Full Stack Developer` |
+| `Haseeba Maqsood ` | `Full Stack Developer` |
 
-**Supervisor:** `[Name, if applicable]`
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
