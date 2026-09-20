@@ -77,12 +77,12 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
     if (!mounted) return;
     if (currentLanguageCode == "ur") {
       await VoiceAssistantService.speak(
-        "تصویر لینے کے لئے 'تصویر لو' کہیں۔ سیٹنگز کھولنے کے لئے 'سیٹنگز' کہیں۔",
+        "تصویر لینے کے لئے 'تصویر لو' کہیں۔ سیٹنگز کھولنے کے لئے 'سیٹنگز' کہیں۔ اگر آپ کرنسی نوٹ کی تصویر لے رہے ہیں تو براہ کرم نوٹ کو اچھی طرح کھول کر تصویر لیں۔",
         languageCode: "ur",
       );
     } else {
       await VoiceAssistantService.speak(
-        "Say 'Capture' to take a picture. Say 'Open Settings' to open settings.",
+        "Say 'Capture' to take a picture. Say 'Open Settings' to open settings. If you are testing a currency note, please make sure it is fully opened before capturing.",
         languageCode: "en",
       );
     }

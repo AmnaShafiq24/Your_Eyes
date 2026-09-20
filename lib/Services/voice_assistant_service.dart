@@ -9,7 +9,7 @@ class VoiceAssistantService {
     await TtsService.speak(text);
   }
 
-  static String _localeIdFor(String languageCode) {
+  static String localeIdFor(String languageCode) {
     switch (languageCode) {
       case "ur":
         return "ur-PK";
@@ -29,7 +29,7 @@ class VoiceAssistantService {
       stt.startListening(
         onResult,
         onSessionEnded: onSessionEnded,
-        localeId: _localeIdFor(languageCode),
+        localeId: localeIdFor(languageCode),
       );
     }
   }

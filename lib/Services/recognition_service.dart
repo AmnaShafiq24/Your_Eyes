@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'voice_assistant_service.dart';
 
 class RecognitionServiceScreen extends StatefulWidget {
@@ -22,36 +25,9 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   String resultMessage = "Processing image...";
   bool isHandlingCommand = false;
 
-  final List<String> currencyLabels = [
-    "banknote", "currency", "cash", "money", "bill", "paper currency", "coin"
-  ];
+  // Firebase Cloud Function (main.py, GPT-4o mini backend).
 
-  final List<String> fruits = [
-    "apple", "banana", "mango", "orange", "grape", "pineapple", "watermelon",
-    "strawberry", "peach", "pear", "plum", "cherry", "kiwi", "papaya",
-    "pomegranate", "guava", "lemon", "lime", "fig", "apricot", "blueberry",
-    "coconut", "dragon fruit", "lychee", "melon", "avocado", "cantaloupe",
-    "honeydew", "raspberry", "blackberry", "cranberry", "mulberry",
-    "passion fruit", "star fruit", "persimmon", "custard apple",
-    "jackfruit", "durian", "rambutan", "longan", "tangerine", "mandarin",
-    "grapefruit", "nectarine", "date", "prune", "gooseberry", "sapodilla",
-    "quince", "loquat", "elderberry", "currant", "tamarind", "olive",
-    "breadfruit", "soursop",
-  ];
-
-  final List<String> vegetables = [
-    "potato", "tomato", "carrot", "onion", "cabbage", "spinach", "pepper",
-    "cucumber", "eggplant", "broccoli", "cauliflower", "garlic", "ginger",
-    "pumpkin", "radish", "beet", "corn", "peas", "lettuce", "zucchini",
-    "okra", "mushroom", "celery", "turnip", "bell pepper", "chili",
-    "asparagus", "artichoke", "leek", "kale", "brussels sprouts",
-    "bok choy", "fennel", "parsnip", "rutabaga", "sweet potato", "yam",
-    "squash", "green bean", "lima bean", "kidney bean", "chickpea",
-    "lentil", "bitter gourd", "bottle gourd", "ridge gourd", "snake gourd",
-    "drumstick", "taro", "arugula", "watercress", "chard",
-  ];
-
-  static const String cloudFunctionUrl =
+  static const String recognitionServerUrl =
       "https://recognizeimage-y2lqize5aq-uc.a.run.app";
 
   @override
@@ -66,16 +42,38 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     super.dispose();
   }
 
+  // Downscales and re-compresses the captured image before upload.
+  Future<Uint8List> _compressForUpload(Uint8List originalBytes) async {
+    final decoded = img.decodeImage(originalBytes);
+    if (decoded == null) return originalBytes;
+
+    const maxDimension = 1024;
+    img.Image resized = decoded;
+    if (decoded.width > maxDimension || decoded.height > maxDimension) {
+      resized = decoded.width >= decoded.height
+          ? img.copyResize(decoded, width: maxDimension)
+          : img.copyResize(decoded, height: maxDimension);
+    }
+
+    return Uint8List.fromList(img.encodeJpg(resized, quality: 80));
+  }
+
   Future<void> analyzeImage() async {
     try {
-      final imageBytes = await widget.capturedImage.readAsBytes();
-      final base64Image = base64Encode(imageBytes);
+      final originalBytes = await widget.capturedImage.readAsBytes();
+      final compressedBytes = await _compressForUpload(originalBytes);
+      final base64Image = base64Encode(compressedBytes);
 
-      final response = await http.post(
-        Uri.parse(cloudFunctionUrl),
+      final response = await http
+          .post(
+        Uri.parse(recognitionServerUrl),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"image": base64Image}),
-      );
+        body: jsonEncode({
+          "image": base64Image,
+          "language": widget.languageCode,
+        }),
+      )
+          .timeout(const Duration(seconds: 25));
 
       final data = jsonDecode(response.body);
 
@@ -87,47 +85,43 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
         return;
       }
 
-      final labels = List<String>.from(data['labels'] ?? []);
-      final List<String> denominations =
-      List<String>.from(data['denominations'] ?? []);
-
-      final int totalObjects = labels.length;
-
-      bool isCurrencyDetected = false;
-      final List<String> matchedFruits = [];
-      final List<String> matchedVegetables = [];
-
-      for (var label in labels) {
-        final text = label.toLowerCase();
-
-        if (currencyLabels.any((c) => text.contains(c))) {
-          isCurrencyDetected = true;
-        }
-        for (var fruit in fruits) {
-          if (text.contains(fruit) && !matchedFruits.contains(fruit)) {
-            matchedFruits.add(fruit);
-          }
-        }
-        for (var veg in vegetables) {
-          if (text.contains(veg) && !matchedVegetables.contains(veg)) {
-            matchedVegetables.add(veg);
-          }
-        }
-      }
-
-      final message = buildResultMessage(
-        totalObjects,
-        isCurrencyDetected,
-        denominations,
-        matchedFruits,
-        matchedVegetables,
-      );
+      final String spokenText = data['spoken_text'] ??
+          "I could not identify this clearly.";
 
       setState(() {
-        resultMessage = message;
+        resultMessage = spokenText;
       });
 
-      await speakAndListen(message);
+      await speakAndListen(spokenText);
+    } on TimeoutException {
+      final msg = widget.languageCode == "ur"
+          ? "درخواست کا وقت ختم ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔"
+          : "The request took too long. Please try again.";
+      setState(() {
+        resultMessage = msg;
+      });
+      await speakAndListen(msg);
+    } on http.ClientException catch (e) {
+
+      final lowerMsg = e.message.toLowerCase();
+      final looksLikeNoInternet = lowerMsg.contains("failed to fetch") ||
+          lowerMsg.contains("failed host lookup") ||
+          lowerMsg.contains("network") ||
+          lowerMsg.contains("socket") ||
+          lowerMsg.contains("connection");
+
+      final msg = looksLikeNoInternet
+          ? (widget.languageCode == "ur"
+          ? "انٹرنیٹ کنکشن نہیں ہے۔ براہ کرم اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+          : "No internet connection. Please check your connection and try again.")
+          : (widget.languageCode == "ur"
+          ? "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔"
+          : "Something went wrong. Please try again.");
+
+      setState(() {
+        resultMessage = msg;
+      });
+      await speakAndListen(msg);
     } catch (e) {
       final errMsg = "Error analyzing image: $e";
       setState(() {
@@ -137,8 +131,6 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     }
   }
 
-  // Speaks the given text, then starts listening for a "go back" command
-  // so the user can return to the camera screen without touching the phone.
   Future<void> speakAndListen(String message) async {
     await VoiceAssistantService.speak(message, languageCode: widget.languageCode);
 
@@ -200,60 +192,6 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     Navigator.pop(context);
   }
 
-  String buildResultMessage(
-      int totalObjects,
-      bool isCurrencyDetected,
-      List<String> denominations,
-      List<String> fruits,
-      List<String> vegetables,
-      ) {
-    final buffer = StringBuffer();
-    final bool isUrdu = widget.languageCode == "ur";
-
-    if (isUrdu) {
-      buffer.writeln("تصویر میں $totalObjects اشیاء ہیں۔");
-    } else {
-      buffer.writeln(
-        "There ${totalObjects == 1 ? 'is' : 'are'} $totalObjects item${totalObjects == 1 ? '' : 's'} in the image.",
-      );
-    }
-
-    final bool hasAnyMatch =
-        isCurrencyDetected || fruits.isNotEmpty || vegetables.isNotEmpty;
-
-    if (!hasAnyMatch) {
-      buffer.writeln(isUrdu
-          ? "کوئی کرنسی نوٹ، پھل، یا سبزی شناخت نہیں ہوئی۔"
-          : "No currency notes, fruits, or vegetables were identified.");
-      return buffer.toString().trim();
-    }
-
-    if (isCurrencyDetected) {
-      if (denominations.isNotEmpty) {
-        final denomText = denominations.map((d) => "$d").join(', ');
-        buffer.writeln(isUrdu
-            ? "کرنسی نوٹ: $denomText روپے"
-            : "Currency note${denominations.length > 1 ? 's' : ''}: ${denominations.map((d) => "$d rupees").join(', ')}");
-      } else {
-        buffer.writeln(isUrdu
-            ? "کرنسی نوٹ شناخت ہوا، لیکن مالیت واضح طور پر نہیں پڑھی جا سکی۔"
-            : "Currency note detected, but the denomination could not be read clearly.");
-      }
-    }
-    if (fruits.isNotEmpty) {
-      buffer.writeln(isUrdu
-          ? "پھل: ${fruits.join(', ')}"
-          : "Fruit${fruits.length > 1 ? 's' : ''}: ${fruits.join(', ')}");
-    }
-    if (vegetables.isNotEmpty) {
-      buffer.writeln(isUrdu
-          ? "سبزی: ${vegetables.join(', ')}"
-          : "Vegetable${vegetables.length > 1 ? 's' : ''}: ${vegetables.join(', ')}");
-    }
-
-    return buffer.toString().trim();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -308,7 +246,7 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
                 ),
                 const SizedBox(height: 16),
                 Image.asset(
-                  "assets/images/Assistant_image.png",
+                  "assets/images/Assistant_girl.png",
                   height: 260,
                 ),
                 const SizedBox(height: 24),
