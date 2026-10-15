@@ -25,10 +25,12 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
   String resultMessage = "Processing image...";
   bool isHandlingCommand = false;
 
-  // Firebase Cloud Function (main.py, GPT-4o mini backend).
-
   static const String recognitionServerUrl =
-      "https://recognizeimage-y2lqize5aq-uc.a.run.app";
+      "https://amber-lankiness-culprit.ngrok-free.dev/recognize";
+
+  // The model expects 448px images, so the photo is shrunk to this size
+  // before it is uploaded.
+  static const int modelImageSize = 448;
 
   @override
   void initState() {
@@ -42,20 +44,27 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
     super.dispose();
   }
 
-  // Downscales and re-compresses the captured image before upload.
+  // Resizes the captured photo so its longest side is 448px (aspect ratio
+  // preserved) and re-encodes it as JPEG. Interpolation.average is used
+  // because the default (nearest-neighbour) makes downscaled text jagged,
+  // which hurts reading currency denominations.
   Future<Uint8List> _compressForUpload(Uint8List originalBytes) async {
     final decoded = img.decodeImage(originalBytes);
     if (decoded == null) return originalBytes;
 
-    const maxDimension = 1024;
-    img.Image resized = decoded;
-    if (decoded.width > maxDimension || decoded.height > maxDimension) {
-      resized = decoded.width >= decoded.height
-          ? img.copyResize(decoded, width: maxDimension)
-          : img.copyResize(decoded, height: maxDimension);
-    }
+    final resized = decoded.width >= decoded.height
+        ? img.copyResize(
+            decoded,
+            width: modelImageSize,
+            interpolation: img.Interpolation.average,
+          )
+        : img.copyResize(
+            decoded,
+            height: modelImageSize,
+            interpolation: img.Interpolation.average,
+          );
 
-    return Uint8List.fromList(img.encodeJpg(resized, quality: 80));
+    return Uint8List.fromList(img.encodeJpg(resized, quality: 90));
   }
 
   Future<void> analyzeImage() async {
@@ -66,13 +75,13 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
 
       final response = await http
           .post(
-        Uri.parse(recognitionServerUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "image": base64Image,
-          "language": widget.languageCode,
-        }),
-      )
+            Uri.parse(recognitionServerUrl),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "image": base64Image,
+              "language": widget.languageCode,
+            }),
+          )
           .timeout(const Duration(seconds: 25));
 
       final data = jsonDecode(response.body);
@@ -85,6 +94,8 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
         return;
       }
 
+      // The server already returns a complete, localized, ready-to-speak
+      // sentence in spoken_text, so there is no need to build our own message.
       final String spokenText = data['spoken_text'] ??
           "I could not identify this clearly.";
 
@@ -102,7 +113,10 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
       });
       await speakAndListen(msg);
     } on http.ClientException catch (e) {
-
+      // package:http wraps underlying network failures (no connection, DNS
+      // failure, fetch blocked, etc.) into ClientException consistently on
+      // both mobile and web, so we can detect "no internet" from the
+      // message text without needing platform-specific exception types.
       final lowerMsg = e.message.toLowerCase();
       final looksLikeNoInternet = lowerMsg.contains("failed to fetch") ||
           lowerMsg.contains("failed host lookup") ||
@@ -112,11 +126,11 @@ class RecognitionServiceScreenState extends State<RecognitionServiceScreen> {
 
       final msg = looksLikeNoInternet
           ? (widget.languageCode == "ur"
-          ? "انٹرنیٹ کنکشن نہیں ہے۔ براہ کرم اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
-          : "No internet connection. Please check your connection and try again.")
+              ? "انٹرنیٹ کنکشن نہیں ہے۔ براہ کرم اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+              : "No internet connection. Please check your connection and try again.")
           : (widget.languageCode == "ur"
-          ? "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔"
-          : "Something went wrong. Please try again.");
+              ? "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔"
+              : "Something went wrong. Please try again.");
 
       setState(() {
         resultMessage = msg;
