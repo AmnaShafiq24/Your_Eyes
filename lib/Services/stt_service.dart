@@ -27,7 +27,7 @@ class STTService {
         Function()? onSessionEnded,
         String? localeId,
       }) async {
-    // Make sure any previous session is fully stopped before starting a new one
+
     if (speech.isListening) {
       await stopListening();
     }
@@ -52,7 +52,6 @@ class STTService {
     onSessionEnded = null;
     if (speech.isListening) {
       await speech.stop();
-      // Give the browser/engine a brief moment to fully release the session on web
       await Future.delayed(const Duration(milliseconds: 200));
     }
   }

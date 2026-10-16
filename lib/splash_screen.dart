@@ -40,7 +40,6 @@ class SplashScreenState extends State<SplashScreen> {
         ),
       );
     } else {
-      // First launch — no language saved yet, show language selection
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

@@ -85,9 +85,6 @@ class SettingsScreenState extends State<SettingsScreen> {
     String? matchedAction;
     String? matchedLanguage;
 
-    // Urdu speech is often transcribed phonetically in Latin letters
-    // (e.g. "wapis jao") rather than Urdu script, depending on the STT
-    // engine/locale, so we match both script and common romanized forms.
     final bool saysGoBack = input.contains("go back") ||
         input.contains("back") ||
         input.contains("واپس") ||
@@ -122,7 +119,6 @@ class SettingsScreenState extends State<SettingsScreen> {
     try {
       if (matchedAction == "back") {
         await goBack();
-        // Screen is popping — no need to restart listening here.
         return;
       } else if (matchedAction == "language" && matchedLanguage != null) {
         await selectLanguage(matchedLanguage);
@@ -159,8 +155,6 @@ class SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString("languageCode", code);
     await prefs.setBool("isLanguageSelected", true);
 
-    // Applies the new language app-wide via the callback passed down
-    // from the calling screen, so it picks it up immediately on return.
     widget.onLocaleChange(code);
 
     if (!mounted) return;

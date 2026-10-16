@@ -21,8 +21,6 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
   Uint8List? capturedImageBytes;
   bool isHandlingCommand = false;
 
-  // Mutable local copy so this screen reflects language changes made from
-  // Settings immediately, without needing to rebuild/recreate this screen.
   late String currentLanguageCode;
 
   @override
@@ -203,8 +201,6 @@ class CaptureImageScreenState extends State<CaptureImageScreen> {
         builder: (context) => SettingsScreen(
           currentLanguageCode: currentLanguageCode,
           onLocaleChange: (newCode) {
-            // Reflect the language change on this screen immediately,
-            // even though this screen instance was never recreated.
             if (mounted) {
               setState(() {
                 currentLanguageCode = newCode;
